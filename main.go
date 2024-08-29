@@ -1,60 +1,129 @@
 package main
 
 import (
-	"fmt"
-	// "log"
-	// "strings"
+	"encoding/json"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 )
 
+type Review struct {
+	Author string `json:"author"`
+	Date   string `json:"date"`
+	Text   string `json:"text"`
+	Rating int    `json:"rating"`
+}
+
+const cacheFilePath = "./reviews_cache.json"
+
 func main() {
-	// Запуск браузера с Rod
+	http.HandleFunc("/reviews", reviewsHandler)
+	http.Handle("/", http.FileServer(http.Dir("./static")))
+
+	// Обновление кеша при запуске и каждые 60 минут
+	go func() {
+		for {
+			updateCache()
+			time.Sleep(60 * time.Minute)
+		}
+	}()
+
+	log.Println("Starting server on :8080...")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func reviewsHandler(w http.ResponseWriter, r *http.Request) {
+	reviews, err := loadReviewsFromCache()
+	if err != nil {
+		http.Error(w, "Failed to load reviews", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reviews)
+}
+
+// updateCache обновляет кеш отзывов, запрашивая данные с сайта и сохраняя их в JSON-файл.
+func updateCache() {
+	reviews, err := fetchReviews()
+	if err != nil {
+		log.Println("Failed to update cache:", err)
+		return
+	}
+
+	data, err := json.Marshal(reviews)
+	if err != nil {
+		log.Println("Failed to marshal reviews:", err)
+		return
+	}
+
+	err = ioutil.WriteFile(cacheFilePath, data, 0644)
+	if err != nil {
+		log.Println("Failed to write cache file:", err)
+	}
+}
+
+// loadReviewsFromCache загружает отзывы из кеша (JSON-файла).
+func loadReviewsFromCache() ([]Review, error) {
+	file, err := os.Open(cacheFilePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var reviews []Review
+	err = json.NewDecoder(file).Decode(&reviews)
+	if err != nil {
+		return nil, err
+	}
+
+	return reviews, nil
+}
+
+// fetchReviews запрашивает отзывы с сайта и возвращает их в виде массива Review.
+func fetchReviews() ([]Review, error) {
 	l := launcher.New().Headless(true).MustLaunch()
 	browser := rod.New().ControlURL(l).MustConnect()
 	defer browser.MustClose()
 
-	// Открытие страницы с отзывами
 	page := browser.MustPage("https://yandex.ru/maps/org/108710443862/reviews/").MustWaitLoad()
+	reviewElements := page.MustElements(".business-review-view")
 
-	// Извлечение списка отзывов
-	reviews := page.MustElements(".business-review-view")
-
-	for _, review := range reviews {
-		// Извлечение имени автора
-		author, err := review.Element(".business-review-view__author-name span")
-		if err != nil {
-			fmt.Println("Author not found")
-		} else {
-			fmt.Println("Author:", author.MustText())
+	var reviews []Review
+	for _, reviewElement := range reviewElements {
+		author, err := reviewElement.Element(".business-review-view__author-name span")
+		authorText := "Author not found"
+		if err == nil {
+			authorText = author.MustText()
 		}
 
-		// Извлечение даты
-		date, err := review.Element("meta[itemprop='datePublished']")
-		if err != nil {
-			fmt.Println("Date not found")
-		} else {
-			fmt.Println("Date:", date.MustProperty("content"))
+		dateElement, err := reviewElement.Element("meta[itemprop='datePublished']")
+		dateText := "Date not found"
+		if err == nil {
+			dateText = dateElement.MustProperty("content").String()
 		}
 
-		// Извлечение текста отзыва
-		text, err := review.Element(".business-review-view__body-text")
-		if err != nil {
-			fmt.Println("Text not found")
-		} else {
-			fmt.Println("Text:", text.MustText())
+		textElement, err := reviewElement.Element(".business-review-view__body-text")
+		text := "Text not found"
+		if err == nil {
+			text = textElement.MustText()
 		}
 
-		// Извлечение рейтинга
-		ratingElements := review.MustElements(".business-rating-badge-view__star._full")
+		ratingElements := reviewElement.MustElements(".business-rating-badge-view__star._full")
 		rating := len(ratingElements)
-		if rating == 0 {
-			fmt.Println("Rating attribute not found")
-		} else {
-			fmt.Printf("Rating: %d/5\n", rating)
-		}
 
-		fmt.Println("---")
+		reviews = append(reviews, Review{
+			Author: authorText,
+			Date:   dateText,
+			Text:   text,
+			Rating: rating,
+		})
 	}
+
+	return reviews, nil
 }

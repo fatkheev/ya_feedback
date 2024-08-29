@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отзывы</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .carousel-container {
+            width: 100%;
+            max-width: 900px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            background-color: #ffffff;
+        }
+
+        .carousel {
+            display: flex;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            width: 100%;
+        }
+
+        .carousel-track {
+            display: flex;
+            transition: transform 0.5s ease;
+        }
+
+        .carousel-item {
+            min-width: 300px;
+            margin: 0 10px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .carousel-item h4 {
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        .carousel-item p {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .carousel-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .carousel-button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .carousel-button:hover {
+            background-color: #0056b3;
+        }
+
+        .carousel-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="carousel-container">
+        <div class="carousel">
+            <div class="carousel-track" id="carouselTrack"></div>
+        </div>
+        <div class="carousel-controls">
+            <button class="carousel-button" id="prevButton">Назад</button>
+            <button class="carousel-button" id="nextButton">Вперед</button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchReviews() {
+            const response = await fetch('/reviews');
+            const reviews = await response.json();
+            return reviews;
+        }
+
+        function createReviewElement(review) {
+            const div = document.createElement('div');
+            div.classList.add('carousel-item');
+            div.innerHTML = `
+                <h4>${review.author}</h4>
+                <p>${new Date(review.date).toLocaleDateString()}</p>
+                <p>${review.text}</p>
+                <p>Rating: ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</p>
+            `;
+            return div;
+        }
+
+        function updateCarousel(reviews) {
+            const track = document.getElementById('carouselTrack');
+            track.innerHTML = '';
+            reviews.forEach(review => {
+                track.appendChild(createReviewElement(review));
+            });
+        }
+
+        let currentIndex = 0;
+
+        function showNext(reviews) {
+            const track = document.getElementById('carouselTrack');
+            if (currentIndex < reviews.length - 3) {
+                currentIndex++;
+                track.style.transform = `translateX(-${currentIndex * 320}px)`;
+            }
+        }
+
+        function showPrev(reviews) {
+            const track = document.getElementById('carouselTrack');
+            if (currentIndex > 0) {
+                currentIndex--;
+                track.style.transform = `translateX(-${currentIndex * 320}px)`;
+            }
+        }
+
+        document.getElementById('nextButton').addEventListener('click', async () => {
+            const reviews = await fetchReviews();
+            showNext(reviews);
+        });
+
+        document.getElementById('prevButton').addEventListener('click', async () => {
+            const reviews = await fetchReviews();
+            showPrev(reviews);
+        });
+
+        // Initial load
+        (async () => {
+            const reviews = await fetchReviews();
+            updateCarousel(reviews);
+        })();
+    </script>
+</body>
+</html>
