@@ -1,34 +1,23 @@
-# Название Docker Compose файла
-COMPOSE_FILE=docker-compose.yml
+# Makefile
 
-# Название сервиса (можно указать несколько, разделенных пробелом)
-SERVICES=feedback-service
+# Переменные
+PROJECT_NAME=ya_feedback
+SERVICE_NAME=feedback-service
 
-# Функции Makefile
-
-.PHONY: all build up down restart logs clean
-
-# Сборка Docker образа
-build:
-	docker-compose -f $(COMPOSE_FILE) build
-
-# Запуск контейнеров в фоне
+# Команды
 up:
-	docker-compose -f $(COMPOSE_FILE) up -d
+	docker-compose up -d
 
-# Остановка контейнеров
 down:
-	docker-compose -f $(COMPOSE_FILE) down
+	docker-compose down
 
-# Перезапуск контейнеров
-restart:
-	docker-compose -f $(COMPOSE_FILE) restart $(SERVICES)
-
-# Просмотр логов
-logs:
-	docker-compose -f $(COMPOSE_FILE) logs -f $(SERVICES)
-
-# Удаление всех контейнеров, образов и сетей, связанных с проектом
 clean: down
-	docker-compose -f $(COMPOSE_FILE) rm -f
-	docker system prune -f
+	docker-compose rm -f
+
+rebuild: clean
+	docker-compose build
+
+logs:
+	docker-compose logs -f
+
+.PHONY: up down clean rebuild logs

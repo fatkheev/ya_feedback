@@ -6,5 +6,6 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./static:/root/static
-    restart: unless-stopped
+      - ./cache:/app/cache
+    restart: always
+    container_name: feedback-service

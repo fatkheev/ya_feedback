@@ -1,36 +1,35 @@
-# Указываем базовый образ
-FROM golang:1.20-alpine AS builder
+# Используем официальный образ Golang для сборки приложения
+FROM golang:1.19-bullseye as builder
 
 # Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем go.mod и go.sum и устанавливаем зависимости
+# Копируем модульные файлы и скачиваем зависимости
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Копируем исходный код в контейнер
+# Копируем все файлы проекта
 COPY . .
 
-# Собираем бинарный файл
+# Сборка Go-приложения
 RUN go build -o main .
 
-# Новый этап для создания минимального образа
-FROM alpine:latest
+# Финальный образ для выполнения
+FROM debian:bullseye-slim
 
-# Устанавливаем сертификаты для HTTPS-запросов
-RUN apk --no-cache add ca-certificates
+# Устанавливаем зависимости для Chromium
+RUN apt-get update && apt-get install -y \
+    chromium \
+    && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем рабочую директорию
 WORKDIR /root/
 
-# Копируем бинарный файл из предыдущего этапа
+# Копируем бинарный файл из стадии сборки
 COPY --from=builder /app/main .
-
-# Копируем папку static в контейнер
 COPY --from=builder /app/static ./static
 
-# Открываем порт для приложения
-EXPOSE 8080
+# Указываем переменные среды для Chromium
+ENV ROD_BROWSER_PATH=/usr/bin/chromium
 
-# Команда запуска контейнера
+# Запуск приложения
 CMD ["./main"]

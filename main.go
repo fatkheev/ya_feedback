@@ -18,7 +18,7 @@ type Review struct {
 	Rating int    `json:"rating"`
 }
 
-const cacheFilePath = "./reviews_cache.json"
+const cacheFilePath = "./cache/reviews_cache.json"
 
 func main() {
 	http.HandleFunc("/reviews", reviewsHandler)
