@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -23,7 +22,8 @@ const cacheFilePath = "./reviews_cache.json"
 
 func main() {
 	http.HandleFunc("/reviews", reviewsHandler)
-	http.Handle("/", http.FileServer(http.Dir("./static")))
+	http.HandleFunc("/feedback", feedbackHandler) // Новый маршрут для загрузки страницы
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
 	// Обновление кеша при запуске и каждые 60 минут
 	go func() {
@@ -37,6 +37,10 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
+func feedbackHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "./static/feedback.html")
+}
+
 func reviewsHandler(w http.ResponseWriter, r *http.Request) {
 	reviews, err := loadReviewsFromCache()
 	if err != nil {
@@ -48,7 +52,6 @@ func reviewsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(reviews)
 }
 
-// updateCache обновляет кеш отзывов, запрашивая данные с сайта и сохраняя их в JSON-файл.
 func updateCache() {
 	reviews, err := fetchReviews()
 	if err != nil {
@@ -62,13 +65,12 @@ func updateCache() {
 		return
 	}
 
-	err = ioutil.WriteFile(cacheFilePath, data, 0644)
+	err = os.WriteFile(cacheFilePath, data, 0644)
 	if err != nil {
 		log.Println("Failed to write cache file:", err)
 	}
 }
 
-// loadReviewsFromCache загружает отзывы из кеша (JSON-файла).
 func loadReviewsFromCache() ([]Review, error) {
 	file, err := os.Open(cacheFilePath)
 	if err != nil {
@@ -85,7 +87,6 @@ func loadReviewsFromCache() ([]Review, error) {
 	return reviews, nil
 }
 
-// fetchReviews запрашивает отзывы с сайта и возвращает их в виде массива Review.
 func fetchReviews() ([]Review, error) {
 	l := launcher.New().Headless(true).MustLaunch()
 	browser := rod.New().ControlURL(l).MustConnect()

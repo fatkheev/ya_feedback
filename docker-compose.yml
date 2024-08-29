@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  feedback-service:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./static:/root/static
+    restart: unless-stopped
