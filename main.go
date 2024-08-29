@@ -18,7 +18,7 @@ type Review struct {
 	Rating int    `json:"rating"`
 }
 
-const cacheFilePath = "./app/cache/reviews_cache.json"
+const cacheFilePath = "./cache/reviews_cache.json"
 
 func main() {
 	http.HandleFunc("/reviews", reviewsHandler)
@@ -62,6 +62,13 @@ func updateCache() {
 	data, err := json.Marshal(reviews)
 	if err != nil {
 		log.Println("Failed to marshal reviews:", err)
+		return
+	}
+
+	// Создаем директорию, если она не существует
+	err = os.MkdirAll("./cache", 0755)
+	if err != nil {
+		log.Println("Failed to create cache directory:", err)
 		return
 	}
 
