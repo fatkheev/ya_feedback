@@ -21,6 +21,15 @@ type Review struct {
 const cacheFilePath = "./cache/reviews_cache.json"
 
 func main() {
+
+	// Выводим текущую рабочую директорию для диагностики
+    workingDir, err := os.Getwd()
+    if err != nil {
+        log.Println("Failed to get working directory:", err)
+    } else {
+        log.Println("Current working directory:", workingDir)
+    }
+	
 	http.HandleFunc("/reviews", reviewsHandler)
 	http.HandleFunc("/feedback", feedbackHandler) // Новый маршрут для загрузки страницы
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
@@ -95,43 +104,44 @@ func loadReviewsFromCache() ([]Review, error) {
 }
 
 func fetchReviews() ([]Review, error) {
-	l := launcher.New().Headless(true).MustLaunch()
-	browser := rod.New().ControlURL(l).MustConnect()
-	defer browser.MustClose()
+    // Указываем путь к установленному в контейнере браузеру
+    l := launcher.New().Bin("/usr/bin/chromium-browser").Headless(true).MustLaunch()
+    browser := rod.New().ControlURL(l).MustConnect()
+    defer browser.MustClose()
 
-	page := browser.MustPage("https://yandex.ru/maps/org/108710443862/reviews/").MustWaitLoad()
-	reviewElements := page.MustElements(".business-review-view")
+    page := browser.MustPage("https://yandex.ru/maps/org/108710443862/reviews/").MustWaitLoad()
+    reviewElements := page.MustElements(".business-review-view")
 
-	var reviews []Review
-	for _, reviewElement := range reviewElements {
-		author, err := reviewElement.Element(".business-review-view__author-name span")
-		authorText := "Author not found"
-		if err == nil {
-			authorText = author.MustText()
-		}
+    var reviews []Review
+    for _, reviewElement := range reviewElements {
+        author, err := reviewElement.Element(".business-review-view__author-name span")
+        authorText := "Author not found"
+        if err == nil {
+            authorText = author.MustText()
+        }
 
-		dateElement, err := reviewElement.Element("meta[itemprop='datePublished']")
-		dateText := "Date not found"
-		if err == nil {
-			dateText = dateElement.MustProperty("content").String()
-		}
+        dateElement, err := reviewElement.Element("meta[itemprop='datePublished']")
+        dateText := "Date not found"
+        if err == nil {
+            dateText = dateElement.MustProperty("content").String()
+        }
 
-		textElement, err := reviewElement.Element(".business-review-view__body-text")
-		text := "Text not found"
-		if err == nil {
-			text = textElement.MustText()
-		}
+        textElement, err := reviewElement.Element(".business-review-view__body-text")
+        text := "Text not found"
+        if err == nil {
+            text = textElement.MustText()
+        }
 
-		ratingElements := reviewElement.MustElements(".business-rating-badge-view__star._full")
-		rating := len(ratingElements)
+        ratingElements := reviewElement.MustElements(".business-rating-badge-view__star._full")
+        rating := len(ratingElements)
 
-		reviews = append(reviews, Review{
-			Author: authorText,
-			Date:   dateText,
-			Text:   text,
-			Rating: rating,
-		})
-	}
+        reviews = append(reviews, Review{
+            Author: authorText,
+            Date:   dateText,
+            Text:   text,
+            Rating: rating,
+        })
+    }
 
-	return reviews, nil
+    return reviews, nil
 }

@@ -3,9 +3,9 @@ version: '3.8'
 services:
   feedback-service:
     build: .
+    container_name: feedback-service
     ports:
       - "8080:8080"
     volumes:
       - ./cache:/app/cache
-    restart: always
-    container_name: feedback-service
+    restart: unless-stopped

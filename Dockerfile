@@ -1,35 +1,30 @@
-# Используем официальный образ Golang для сборки приложения
-FROM golang:1.19-bullseye as builder
+# Указываем базовый образ
+FROM golang:1.19-alpine
 
-# Устанавливаем рабочую директорию внутри контейнера
+# Устанавливаем необходимые зависимости
+RUN apk add --no-cache git chromium nss freetype ttf-freefont ca-certificates \
+    harfbuzz bash udev
+
+# Создаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем модульные файлы и скачиваем зависимости
+# Копируем файлы go.mod и go.sum для установки зависимостей
 COPY go.mod go.sum ./
+
+# Устанавливаем зависимости
 RUN go mod download
 
-# Копируем все файлы проекта
+# Копируем оставшиеся файлы проекта
 COPY . .
 
-# Сборка Go-приложения
+# Создаем директорию для кеша
+RUN mkdir -p /app/cache
+
+# Сборка Go приложения
 RUN go build -o main .
 
-# Финальный образ для выполнения
-FROM debian:bullseye-slim
+# Указываем порт, который будет открыт
+EXPOSE 8080
 
-# Устанавливаем зависимости для Chromium
-RUN apt-get update && apt-get install -y \
-    chromium \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /root/
-
-# Копируем бинарный файл из стадии сборки
-COPY --from=builder /app/main .
-COPY --from=builder /app/static ./static
-
-# Указываем переменные среды для Chromium
-ENV ROD_BROWSER_PATH=/usr/bin/chromium
-
-# Запуск приложения
+# Команда запуска приложения
 CMD ["./main"]
