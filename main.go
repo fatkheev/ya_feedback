@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -12,29 +13,27 @@ import (
 )
 
 type Review struct {
-	Author string `json:"author"`
-	Date   string `json:"date"`
-	Text   string `json:"text"`
-	Rating int    `json:"rating"`
+	Author       string `json:"author"`
+	Date         string `json:"date"`
+	Text         string `json:"text"`
+	Rating       int    `json:"rating"`
+	ProfileImage string `json:"profile_image"`
 }
 
 const cacheFilePath = "./cache/reviews_cache.json"
 
 func main() {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		log.Println("Failed to get working directory:", err)
+	} else {
+		log.Println("Current working directory:", workingDir)
+	}
 
-	// Выводим текущую рабочую директорию для диагностики
-    workingDir, err := os.Getwd()
-    if err != nil {
-        log.Println("Failed to get working directory:", err)
-    } else {
-        log.Println("Current working directory:", workingDir)
-    }
-	
 	http.HandleFunc("/reviews", reviewsHandler)
-	http.HandleFunc("/feedback", feedbackHandler) // Новый маршрут для загрузки страницы
+	http.HandleFunc("/feedback", feedbackHandler)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
-	// Обновление кеша при запуске и каждые 60 минут
 	go func() {
 		for {
 			updateCache()
@@ -74,7 +73,6 @@ func updateCache() {
 		return
 	}
 
-	// Создаем директорию, если она не существует
 	err = os.MkdirAll("./cache", 0755)
 	if err != nil {
 		log.Println("Failed to create cache directory:", err)
@@ -104,44 +102,95 @@ func loadReviewsFromCache() ([]Review, error) {
 }
 
 func fetchReviews() ([]Review, error) {
-    // Указываем путь к установленному в контейнере браузеру
-    l := launcher.New().Bin("/usr/bin/chromium-browser").Headless(true).MustLaunch()
-    browser := rod.New().ControlURL(l).MustConnect()
-    defer browser.MustClose()
+	// Определяем путь к браузеру
+	browserPath := getBrowserPath()
 
-    page := browser.MustPage("https://yandex.ru/maps/org/108710443862/reviews/").MustWaitLoad()
-    reviewElements := page.MustElements(".business-review-view")
+	l := launcher.New().Headless(true).Bin(browserPath).MustLaunch()
+	browser := rod.New().ControlURL(l).MustConnect()
+	defer browser.MustClose()
 
-    var reviews []Review
-    for _, reviewElement := range reviewElements {
-        author, err := reviewElement.Element(".business-review-view__author-name span")
-        authorText := "Author not found"
-        if err == nil {
-            authorText = author.MustText()
-        }
+	page := browser.MustPage("https://yandex.ru/maps/org/108710443862/reviews/").MustWaitLoad()
 
-        dateElement, err := reviewElement.Element("meta[itemprop='datePublished']")
-        dateText := "Date not found"
-        if err == nil {
-            dateText = dateElement.MustProperty("content").String()
-        }
+	for {
+		previousHeight := page.MustEval(`() => document.body.scrollHeight`).Int()
+		page.MustEval(`() => window.scrollTo(0, document.body.scrollHeight)`)
+		time.Sleep(2 * time.Second)
+		currentHeight := page.MustEval(`() => document.body.scrollHeight`).Int()
 
-        textElement, err := reviewElement.Element(".business-review-view__body-text")
-        text := "Text not found"
-        if err == nil {
-            text = textElement.MustText()
-        }
+		if currentHeight == previousHeight {
+			break
+		}
+	}
 
-        ratingElements := reviewElement.MustElements(".business-rating-badge-view__star._full")
-        rating := len(ratingElements)
+	reviewElements := page.MustElements(".business-review-view")
 
-        reviews = append(reviews, Review{
-            Author: authorText,
-            Date:   dateText,
-            Text:   text,
-            Rating: rating,
-        })
-    }
+	var reviews []Review
+	for _, reviewElement := range reviewElements {
+		author, err := reviewElement.Element(".business-review-view__author-name span")
+		authorText := "Author not found"
+		if err == nil {
+			authorText = author.MustText()
+		}
 
-    return reviews, nil
+		dateElement, err := reviewElement.Element("meta[itemprop='datePublished']")
+		dateText := "Date not found"
+		if err == nil {
+			dateText = dateElement.MustProperty("content").String()
+		}
+
+		textElement, err := reviewElement.Element(".business-review-view__body-text")
+		text := "Text not found"
+		if err == nil {
+			text = textElement.MustText()
+		}
+
+		ratingElements := reviewElement.MustElements(".business-rating-badge-view__star._full")
+		rating := len(ratingElements)
+
+		profileImageElement, err := reviewElement.Element(".business-review-view__user-icon .user-icon-view__icon")
+		profileImageURL := ""
+		if err == nil {
+			styleAttribute, _ := profileImageElement.Attribute("style")
+			if styleAttribute != nil {
+				profileImageURL = extractURLFromStyle(*styleAttribute)
+			}
+		}
+
+		reviews = append(reviews, Review{
+			Author:       authorText,
+			Date:         dateText,
+			Text:         text,
+			Rating:       rating,
+			ProfileImage: profileImageURL,
+		})
+	}
+
+	return reviews, nil
+}
+
+func extractURLFromStyle(style string) string {
+	start := strings.Index(style, `url("`) + 5
+	end := strings.Index(style, `")`)
+	if start > 4 && end > start {
+		return style[start:end]
+	}
+	return ""
+}
+
+func getBrowserPath() string {
+	// Пытаемся найти браузер в системе
+	possiblePaths := []string{
+		"/usr/bin/chromium-browser", // Default for many Linux distributions
+		"/usr/bin/google-chrome",    // Default for Google Chrome on Linux
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Default for macOS
+	}
+
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	// Если браузер не найден, пробуем встроенный
+	return launcher.NewBrowser().MustGet()
 }

@@ -1,5 +1,5 @@
 # Указываем базовый образ
-FROM golang:1.19-alpine
+FROM golang:1.21-alpine
 
 # Устанавливаем необходимые зависимости
 RUN apk add --no-cache git chromium nss freetype ttf-freefont ca-certificates \
