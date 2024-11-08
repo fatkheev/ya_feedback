@@ -8,20 +8,16 @@ RUN apk add --no-cache git chromium nss freetype ttf-freefont ca-certificates \
 # Создаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем файлы go.mod и go.sum для установки зависимостей
-COPY go.mod go.sum ./
+COPY . .
 
 # Устанавливаем зависимости
 RUN go mod download
 
-# Копируем оставшиеся файлы проекта
-COPY . .
-
 # Создаем директорию для кеша
 RUN mkdir -p /app/cache
 
-# Сборка Go приложения
-RUN go build -o main .
+# Сборка Go-приложения
+RUN go build -o main ./cmd/app/make.go
 
 # Указываем порт, который будет открыт
 EXPOSE 8080

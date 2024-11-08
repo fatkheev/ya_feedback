@@ -1,0 +1,6 @@
+.vscode/           # VSCode рабочие файлы
+*.code-workspace  # Рабочие пространства VSCode
+
+*.log
+*.tmp
+*.swp
